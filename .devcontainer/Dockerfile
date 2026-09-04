@@ -1,4 +1,4 @@
-FROM openjdk:17-jdk-slim-bullseye
+FROM eclipse-temurin:21-jdk-resolute
 
 # Install some basic development utilities
 RUN apt-get update && apt-get install -y \ 
@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
   python3 \
   zip \
   && rm -rf /var/lib/apt/lists/* \
-  && curl -fsSL https://deb.nodesource.com/setup_17.x | bash \
+  && curl -fsSL https://deb.nodesource.com/setup_24.x | bash \
   && apt-get install -y nodejs \
   && npm install -g yarn \
   && rm -rf /var/lib/apt/lists/* 
@@ -25,24 +25,3 @@ RUN bash -c 'cs install sbt'
 
 # Get http server
 RUN bash -c 'npm install -g http-server'
-
-# Precache sbt version as part of the image.
-# Commented out because multi-arch buildx takes too long doing this.
-#
-#ARG SBT_VERSION=1.6.1
-#ARG SCALA_VERSION=3.1.0
-#ARG SCALAJS_VERSION=1.8.0
-#RUN mkdir -p /sbtprecacheproj/project && \
-#  cd /sbtprecacheproj && \
-#  echo sbt.version=${SBT_VERSION} > project/build.properties && \
-#  echo 'addSbtPlugin("org.scala-js" % "sbt-scalajs" % "'${SCALAJS_VERSION}'")' > project/plugins.sbt && \
-#  echo '@main def hello = println("hello")' > main.scala && \
-#  echo 'enablePlugins(ScalaJSPlugin); scalaVersion := "'${SCALA_VERSION}'"' > build.sbt && \
-#  sbt fastLinkJS && cd / && rm -r -f /tmp/sbt-precompile
-
-# Things I forgot; added late to reuse docker layers
-RUN apt-get update && apt-get install -y \
-  procps \
-  && rm -rf /var/lib/apt/lists/* 
-
-CMD bash
