@@ -63,7 +63,7 @@ case class Animal(
     assessmentFrequency:AssessmentFrequency = AssessmentFrequency.Unspecified,
     display:DisplayStyle = DisplayStyle.random,
     testData:Boolean = false
-) {
+) derives ReadWriter {
 
     def displayName = if name.nonEmpty then name else "Unnamed animal"
 }

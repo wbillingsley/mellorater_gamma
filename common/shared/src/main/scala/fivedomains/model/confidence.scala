@@ -1,9 +1,10 @@
 package fivedomains.model
 
 import fivedomains.*
+import upickle.default.ReadWriter
 
 /** Confidence as a value between 0 and 1 */
-case class Confidence(value: Double) {
+case class Confidence(value: Double) derives ReadWriter {
 
     def abbreviation:String = {
         if value < 0.2 then "VL"

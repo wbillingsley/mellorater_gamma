@@ -1,40 +1,55 @@
 package fivedomains.server
 
-import zio._
-import zio.http.*
-import fivedomains.database.*
-import io.getquill.jdbczio.Quill
 import java.util.UUID
-import io.getquill.LowerCase
+import fivedomains.model.{Animal, Assessment}
+import fivedomains.database.{Users, Animals, Assessments}
 
-object Main extends ZIOAppDefault {
+object Main extends cask.MainRoutes {
 
-  val dataserviceLive = ZLayer.fromFunction(DataService.apply(_))
-  val datasourceLive = Quill.DataSource.fromPrefix("mellorator")
-  val postgresLive = Quill.Postgres.fromNamingStrategy(LowerCase)
+  override def host = "0.0.0.0"
+  override def port = sys.env.get("PORT").map(_.toInt).getOrElse(8081)
 
-  val app = Http.collectZIO[Request] {
-    case Method.GET -> Root / "text" => 
-      ZIO.succeed(Response.text("Hello World!"))
+  private val corsOrigin = sys.env.getOrElse("CORS_ALLOW_ORIGIN", "*")
+  override def mainDecorators = Seq(new Cors(corsOrigin))
 
-    case Method.GET -> Root / "doit" => 
-      (for 
-        n <- DataLayer.saveUser(MellUser(UUID.randomUUID(), "Cecily"))
-        _ = println(n)
-      yield Response.text(s"It was $n")).orDieWith({ case x => x.printStackTrace; x })
-  }
+  // Undertow answers CORS preflight requests as 405s (no route is registered for OPTIONS);
+  // turn those into a plain 204 with the CORS headers so the browser lets the real request through.
+  override def handleMethodNotAllowed(req: cask.model.Request): cask.model.Response.Raw =
+    if req.exchange.getRequestMethod.toString.equalsIgnoreCase("OPTIONS") then
+      cask.model.Response("", statusCode = 204, headers = new Cors(corsOrigin).headers)
+    else super.handleMethodNotAllowed(req)
 
+  @cask.get("/api/health")
+  def health() = "ok"
 
-  override val run =
+  @cask.postJson("/api/users")
+  def createUser(name: String) = Users.create(name)
 
-  /*
-    val u = MellUser(UUID.randomUUID(), "Bob")
+  @cask.getJson("/api/users/:id")
+  def getUser(id: String) =
+    Users.find(UUID.fromString(id)) match
+      case Some(u) => cask.model.Response(upickle.default.writeJs(u))
+      case None => cask.model.Response(ujson.Obj("error" -> "not found"), statusCode = 404)
 
-    val h = (for {
-      n <- DataLayer.saveUser(u)
-      _ = println(n)
-    } yield n).provide(dataserviceLive, datasourceLive, postgresLive)
-    */
+  @cask.postJson("/api/animals")
+  def saveAnimal(owner: UUID, animal: Animal) = Animals.upsert(owner, animal)
 
-    Server.serve(app).provide(Server.defaultWithPort(8081), dataserviceLive, datasourceLive, postgresLive)
+  @cask.getJson("/api/animals")
+  def listAnimals(owner: String) = Animals.listForOwner(UUID.fromString(owner))
+
+  @cask.getJson("/api/animals/:id")
+  def getAnimal(id: String) =
+    Animals.find(UUID.fromString(id)) match
+      case Some(a) => cask.model.Response(upickle.default.writeJs(a))
+      case None => cask.model.Response(ujson.Obj("error" -> "not found"), statusCode = 404)
+
+  @cask.postJson("/api/assessments")
+  def saveAssessment(owner: UUID, assessment: Assessment) =
+    ujson.Obj("id" -> Assessments.insert(owner, assessment).toString)
+
+  @cask.getJson("/api/assessments")
+  def listAssessmentsForAnimal(animal: String) =
+    Assessments.listForAnimal(UUID.fromString(animal))
+
+  initialize()
 }

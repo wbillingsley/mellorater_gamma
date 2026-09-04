@@ -70,21 +70,30 @@ lazy val awServer = project.in(file("server"))
   .dependsOn(commonJVM)
   .settings(
     libraryDependencies ++= Seq(
-      "dev.zio" %% "zio-http" % "3.0.0-RC2",
+      "com.lihaoyi" %% "cask" % "0.10.2",
+      "com.lihaoyi" %% "requests" % "0.9.0",
 
-      "io.getquill" %% "quill-jdbc-zio" % "4.6.0.1",
+      "org.postgresql" % "postgresql" % "42.7.13",
+      "com.zaxxer" % "HikariCP" % "6.3.0",
 
-      "org.postgresql"       %  "postgresql"     % "42.3.1",
-
-      "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.20.0"
-    ),
-
-    excludeDependencies ++= Seq(
-      // zio-http and protoQuill clash on the version of geny
-      "com.lihaoyi" % "geny_2.13"
-
+      "org.slf4j" % "slf4j-simple" % "2.0.16"
     )
-
   )
+
+// The previous back-end (zio-http + quill-jdbc-zio) was moved aside to server-legacy-zio/
+// and is intentionally not built. See CLAUDE.md for why.
+// lazy val awServerLegacyZio = project.in(file("server-legacy-zio"))
+//   .dependsOn(commonJVM)
+//   .settings(
+//     libraryDependencies ++= Seq(
+//       "dev.zio" %% "zio-http" % "3.0.0-RC2",
+//       "io.getquill" %% "quill-jdbc-zio" % "4.6.0.1",
+//       "org.postgresql"       %  "postgresql"     % "42.3.1",
+//       "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.20.0"
+//     ),
+//     excludeDependencies ++= Seq(
+//       "com.lihaoyi" % "geny_2.13"
+//     )
+//   )
 
 

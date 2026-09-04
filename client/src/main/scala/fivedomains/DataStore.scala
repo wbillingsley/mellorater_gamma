@@ -20,14 +20,8 @@ import java.util.UUID
 import com.wbillingsley.veautiful.logging.Logger
 
 
-// given RW[AssessmentFrequency] = ReadWriter.merge(
-//     macroRW[AssessmentFrequency.Daily], macroRW[AssessmentFrequency.Weekly], macroRW[AssessmentFrequency.Monthly],
-// )
-given RW[Animal] = macroRW
-given RW[Confidence] = macroRW
-given RW[Answer] = macroRW
-//given RW[Situation] = RW.merge(macroRW[Situation.Competition], macroRW[Situation.DayToDay], macroRW[Situation.Exercising], macroRW[Situation.Showing], macroRW[Situation.Training], macroRW[Situation.Transport], macroRW[Situation.Veterinary], macroRW[Situation.Working])
-given RW[Assessment] = macroRW
+// Animal, Confidence, Answer and Assessment now derive ReadWriter directly in the common module,
+// so their givens are picked up from their companion objects without redeclaring here.
 
 case class DataBlob(
     acceptedSensitiveTopics:Boolean,

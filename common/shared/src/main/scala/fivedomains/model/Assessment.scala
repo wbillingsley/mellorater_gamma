@@ -1,6 +1,8 @@
 package fivedomains.model
 
-case class Assessment(animal:AnimalId, situation:Situation, time:Double, answers:Map[Int, Answer]) {
+import upickle.default.ReadWriter
+
+case class Assessment(animal:AnimalId, situation:Situation, time:Double, answers:Map[Int, Answer]) derives ReadWriter {
 
     // /** Average score in a given domain */
     // def average(domain:Domain):Option[Double = domain match {
