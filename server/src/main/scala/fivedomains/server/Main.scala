@@ -12,6 +12,9 @@ object Main extends cask.MainRoutes {
   private val corsOrigin = sys.env.getOrElse("CORS_ALLOW_ORIGIN", "*")
   override def mainDecorators = Seq(new Cors(corsOrigin))
 
+  // For AI-assisted advice text -- falls back to .env/apikey.txt if GROQ_API_KEY isn't set.
+  val groqApiKey: Option[String] = Secrets.fromEnvOrFile("GROQ_API_KEY", "apikey.txt")
+
   // Undertow answers CORS preflight requests as 405s (no route is registered for OPTIONS);
   // turn those into a plain 204 with the CORS headers so the browser lets the real request through.
   override def handleMethodNotAllowed(req: cask.model.Request): cask.model.Response.Raw =
