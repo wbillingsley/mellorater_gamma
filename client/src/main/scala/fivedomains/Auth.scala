@@ -100,11 +100,18 @@ object Auth {
       * the phrase leaking.
       */
     def regenerateRecoveryPhrase(): Future[Either[String, String]] =
+        authedRequest(HttpMethod.POST, "/api/recovery-phrase", None).map(_.map(body => ujson.read(body).obj("recoveryPhrase").str))
+
+    /** Makes an authenticated API call using the stored device token, for other client modules
+      * (e.g. Ai.scala) that need to hit an authed route. Returns the raw response body on 200,
+      * or an error message otherwise (including when there's no session).
+      */
+    def authedRequest(method: HttpMethod, path: String, body: Option[ujson.Value]): Future[Either[String, String]] =
         storedToken match
             case Some(token) =>
-                request(HttpMethod.POST, "/api/recovery-phrase", None, Some(token)).map {
-                    case (200, body) => Right(ujson.read(body).obj("recoveryPhrase").str)
-                    case (_, body) => Left(errorMessage(body))
+                request(method, path, body, Some(token)).map {
+                    case (200, respBody) => Right(respBody)
+                    case (_, respBody) => Left(errorMessage(respBody))
                 }
             case None => Future.successful(Left("Not logged in"))
 }

@@ -88,5 +88,20 @@ object Main extends cask.MainRoutes {
   def listAssessmentsForAnimal(animal: String, request: cask.Request) =
     authed(request) { user => ok(upickle.default.writeJs(Assessments.listForAnimal(UUID.fromString(animal), user.id))) }
 
+  /** Generates AI advice text for an assessment via Groq. Used by the client's "server" AI
+    * backend (see client/.../Ai.scala); the alternative "puter.js" backend calls puter.js
+    * directly from the browser instead of this route.
+    */
+  @cask.postJson("/api/ai/advice")
+  def aiAdvice(animal: Animal, assessment: Assessment, request: cask.Request) =
+    authed(request) { user => ok(ujson.Obj("advice" -> Groq.advice(animal, assessment))) }
+
+  /** Hands out the system prompt (see AiPrompts.scala) so the client's puter.js backend uses the
+    * same wording as the server's own Groq calls, without duplicating it in client code.
+    */
+  @cask.getJson("/api/ai/system-prompt")
+  def aiSystemPrompt(request: cask.Request) =
+    authed(request) { _ => ok(ujson.Obj("systemPrompt" -> AiPrompts.systemPrompt)) }
+
   initialize()
 }
