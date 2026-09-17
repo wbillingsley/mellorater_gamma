@@ -2,10 +2,22 @@ CREATE DATABASE mellorator WITH ENCODING 'UTF8';
 
 \c mellorator
 
--- The users of our app
+-- The users of our app. There are no passwords: recoveryhash is a SHA-256 hash of a
+-- machine-generated recovery phrase (see fivedomains.database.Auth), shown to the user once at
+-- registration and used only to link a new device to this account.
 CREATE TABLE IF NOT EXISTS melluser (
     id UUID PRIMARY KEY,
     name VARCHAR NOT NULL,
+    recoveryhash VARCHAR NOT NULL UNIQUE,
+    created BIGINT NOT NULL
+);
+
+-- Bearer tokens for day-to-day API auth, kept in the client's localStorage. Separate from the
+-- recovery phrase so a device's token can't be used to derive it, and so registering a new
+-- device just adds a token rather than invalidating existing ones.
+CREATE TABLE IF NOT EXISTS usertoken (
+    token VARCHAR PRIMARY KEY,
+    melluser UUID NOT NULL REFERENCES melluser(id),
     created BIGINT NOT NULL
 );
 

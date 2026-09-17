@@ -25,17 +25,23 @@ object Router extends HistoryRouter[AppRoute] {
         case AppRoute.Animal(id) => s"#/animals/$id"
         case AppRoute.Assess(id) => s"#/assess/$id"
 
-    override def render = this.route match 
-        case AppRoute.Front => 
-            <.div(^.cls := (top), frontPage)
-        case AppRoute.Settings => 
-            <.div(^.cls := (top), settingsPage)
-        case AppRoute.AddAnimal =>
-            <.div(^.cls := (top), animals.addAnimalPage)
-        case AppRoute.Animal(id) => 
-            <.div(^.cls := (top), animals.animalDetailsPage(id))
-        case AppRoute.Assess(id) => 
-            <.div(^.cls := (top), assessments.assessmentPage(id))
+    override def render = Auth.state.value match
+        case AuthState.Checking =>
+            <.div(^.cls := (top), <.p("Loading..."))
+        case AuthState.LoggedOut =>
+            AccountGate()
+        case AuthState.LoggedIn(_) =>
+            this.route match
+                case AppRoute.Front =>
+                    <.div(^.cls := (top), frontPage)
+                case AppRoute.Settings =>
+                    <.div(^.cls := (top), settingsPage)
+                case AppRoute.AddAnimal =>
+                    <.div(^.cls := (top), animals.addAnimalPage)
+                case AppRoute.Animal(id) =>
+                    <.div(^.cls := (top), animals.animalDetailsPage(id))
+                case AppRoute.Assess(id) =>
+                    <.div(^.cls := (top), assessments.assessmentPage(id))
     
     override def routeFromLocation() = PathDSL.hashPathList() match {
         case "settings" :: Nil => AppRoute.Settings

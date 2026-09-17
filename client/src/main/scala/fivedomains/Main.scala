@@ -31,4 +31,6 @@ given styleSuite:StyleSuite = StyleSuite()
   styleSuite.install()
 
   root.render(Router)
+
+  Auth.init()
 }

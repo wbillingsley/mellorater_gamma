@@ -4,6 +4,8 @@ import com.wbillingsley.veautiful.*
 import html.{VHtmlContent, Styling, DHtmlComponent, Animator}
 import fivedomains.testdata.addPickles
 import fivedomains.DataStore.hasTestData
+import scala.util.{Success, Failure}
+import scala.concurrent.ExecutionContext.Implicits.global
 
 object SettingsScreen extends DHtmlComponent {
     import html.{<, ^}
@@ -95,6 +97,64 @@ case class ResetData() extends DHtmlComponent {
 }
 
 
+/** A widget for revealing (by regenerating) the account's recovery phrase, in case it was lost
+  * or never saved. Regenerating invalidates whatever recovery phrase the account had before --
+  * device tokens already issued keep working.
+  */
+case class RecoveryPhrase() extends DHtmlComponent {
+
+    val enabled = stateVariable(false)
+    val busy = stateVariable(false)
+    val phrase = stateVariable(Option.empty[String])
+    val error = stateVariable(Option.empty[String])
+
+    def regenerate() =
+        error.value = None
+        busy.value = true
+        Auth.regenerateRecoveryPhrase().onComplete {
+            case Success(Right(p)) =>
+                busy.value = false
+                enabled.value = false
+                phrase.value = Some(p)
+            case Success(Left(msg)) =>
+                busy.value = false
+                error.value = Some(msg)
+            case Failure(_) =>
+                busy.value = false
+                error.value = Some("Couldn't reach the server. Please try again.")
+        }
+
+    override def render = {
+        import html.{<, ^}
+        <.div(
+            <.p(
+                """|Your recovery phrase is the only way to link a new device to your account. If you've lost it, or never
+                   |saved it, you can get a new one here -- but doing so invalidates your old recovery phrase (any device
+                   |you're already using stays logged in).
+                   |""".stripMargin
+            ),
+
+            phrase.value match
+                case Some(p) =>
+                    <.p(^.style := "font-family: monospace; font-size: 1.3em; text-align: center; background: white; padding: 0.5em; border-radius: 0.25em;", p)
+                case None =>
+                    <.span()
+            ,
+
+            error.value match
+                case Some(msg) => <.p(^.style := s"color: $dangerFg;", msg)
+                case None => <.span()
+            ,
+
+            <.input(^.attr("type") := "checkbox", ^.prop.checked := enabled.value, ^.onChange --> { enabled.value = !enabled.value }),
+            <.label("Tick to unlock"),
+            <.button(^.cls := (button, noticeButton), ^.prop.disabled := (!enabled.value || busy.value), "Get a new recovery phrase", ^.onClick --> regenerate())
+        )
+    }
+
+}
+
+
 /** A widget for adding or removing demo animals */
 case class DemoData() extends DHtmlComponent {
 
@@ -151,6 +211,9 @@ def settingsPage =
 
         <.div(^.style := "margin: 1em;",
 
+
+        <.h2("Account"),
+        RecoveryPhrase(),
 
         <.h2("First use"),
         ResetFirstTimeNotice(),

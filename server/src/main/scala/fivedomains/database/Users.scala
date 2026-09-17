@@ -2,9 +2,7 @@ package fivedomains.database
 
 import java.util.UUID
 import java.sql.ResultSet
-import upickle.default.ReadWriter
-
-case class MellUser(id: UUID, name: String, created: Long) derives ReadWriter
+import fivedomains.model.MellUser
 
 /** Plain JDBC access to the melluser table. No ORM: the SQL is short enough to just read. */
 object Users {
@@ -15,20 +13,6 @@ object Users {
       name = rs.getString("name"),
       created = rs.getLong("created")
     )
-
-  def create(name: String): MellUser = {
-    val user = MellUser(UUID.randomUUID(), name, System.currentTimeMillis())
-    Db.withConnection { conn =>
-      val stmt = conn.prepareStatement(
-        "INSERT INTO melluser (id, name, created) VALUES (?, ?, ?)"
-      )
-      stmt.setObject(1, user.id)
-      stmt.setString(2, user.name)
-      stmt.setLong(3, user.created)
-      stmt.executeUpdate()
-    }
-    user
-  }
 
   def find(id: UUID): Option[MellUser] = Db.withConnection { conn =>
     val stmt = conn.prepareStatement("SELECT id, name, created FROM melluser WHERE id = ?")

@@ -32,9 +32,11 @@ object Animals {
     animal
   }
 
-  def find(id: UUID): Option[Animal] = Db.withConnection { conn =>
-    val stmt = conn.prepareStatement("SELECT data FROM animal WHERE id = ?")
+  /** Scoped to owner so one user can't fetch another's animal by guessing its id. */
+  def find(id: UUID, owner: UUID): Option[Animal] = Db.withConnection { conn =>
+    val stmt = conn.prepareStatement("SELECT data FROM animal WHERE id = ? AND owner = ?")
     stmt.setObject(1, id)
+    stmt.setObject(2, owner)
     val rs = stmt.executeQuery()
     if rs.next() then Some(fromRow(rs)) else None
   }

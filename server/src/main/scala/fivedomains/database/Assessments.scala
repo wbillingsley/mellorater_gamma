@@ -29,9 +29,11 @@ object Assessments {
     id
   }
 
-  def listForAnimal(animal: AnimalId): Seq[Assessment] = Db.withConnection { conn =>
-    val stmt = conn.prepareStatement("SELECT data FROM assessment WHERE animal = ? ORDER BY created")
+  /** Scoped to owner so one user can't read another's assessments by guessing an animal id. */
+  def listForAnimal(animal: AnimalId, owner: UUID): Seq[Assessment] = Db.withConnection { conn =>
+    val stmt = conn.prepareStatement("SELECT data FROM assessment WHERE animal = ? AND owner = ? ORDER BY created")
     stmt.setObject(1, animal)
+    stmt.setObject(2, owner)
     val rs = stmt.executeQuery()
     Iterator.unfold(rs)(rs => if rs.next() then Some((fromRow(rs), rs)) else None).toSeq
   }
