@@ -77,7 +77,13 @@ lazy val awServer = project.in(file("server"))
       "com.zaxxer" % "HikariCP" % "6.3.0",
 
       "org.slf4j" % "slf4j-simple" % "2.0.16"
-    )
+    ),
+
+    // sbt-revolver forks reStart's JVM with cwd = (baseDirectory in reStart), which defaults to
+    // this subproject's own directory (server/). Point it at the repo root instead, since that's
+    // where .env/ (see Secrets.scala) and docker-compose.yaml live, and where commands are
+    // documented to be run from.
+    reStart / baseDirectory := (ThisBuild / baseDirectory).value
   )
 
 // The previous back-end (zio-http + quill-jdbc-zio) was moved aside to server-legacy-zio/

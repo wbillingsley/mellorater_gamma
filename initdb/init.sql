@@ -46,3 +46,17 @@ CREATE TABLE IF NOT EXISTS assessment (
 
 CREATE INDEX IF NOT EXISTS assessment_animal ON assessment(animal);
 CREATE INDEX IF NOT EXISTS assessment_owner ON assessment(owner);
+
+-- Cached AI-generated feedback for an assessment, keyed by (animal, assessmenttime) since
+-- Assessment has no id of its own (see common/shared/.../model/Assessment.scala). Lets past AI
+-- feedback be retrieved without re-calling the AI -- see fivedomains.database.AiFeedbacks.
+CREATE TABLE IF NOT EXISTS aifeedback (
+    animal UUID NOT NULL REFERENCES animal(id),
+    assessmenttime DOUBLE PRECISION NOT NULL,
+    owner UUID NOT NULL REFERENCES melluser(id),
+    data JSONB NOT NULL,
+    created BIGINT NOT NULL,
+    PRIMARY KEY (animal, assessmenttime)
+);
+
+CREATE INDEX IF NOT EXISTS aifeedback_owner ON aifeedback(owner);

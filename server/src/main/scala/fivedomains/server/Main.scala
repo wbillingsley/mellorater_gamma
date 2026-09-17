@@ -1,8 +1,8 @@
 package fivedomains.server
 
 import java.util.UUID
-import fivedomains.model.{Animal, Assessment, MellUser}
-import fivedomains.database.{Auth, Animals, Assessments}
+import fivedomains.model.{Animal, Assessment, MellUser, AiFeedback}
+import fivedomains.database.{Auth, Animals, Assessments, AiFeedbacks}
 
 object Main extends cask.MainRoutes {
 
@@ -10,17 +10,36 @@ object Main extends cask.MainRoutes {
   override def port = sys.env.get("PORT").map(_.toInt).getOrElse(8081)
 
   private val corsOrigin = sys.env.getOrElse("CORS_ALLOW_ORIGIN", "*")
-  override def mainDecorators = Seq(new Cors(corsOrigin))
+  private val cors = new Cors(corsOrigin)
+  override def mainDecorators = Seq(cors)
 
   // For AI-assisted advice text -- falls back to .env/apikey.txt if GROQ_API_KEY isn't set.
   val groqApiKey: Option[String] = Secrets.fromEnvOrFile("GROQ_API_KEY", "apikey.txt")
 
-  // Undertow answers CORS preflight requests as 405s (no route is registered for OPTIONS);
-  // turn those into a plain 204 with the CORS headers so the browser lets the real request through.
+  // cask only runs mainDecorators around a *successful* route dispatch -- a 404, a 405, or an
+  // endpoint throwing (400 for a bad request body, 500 for anything else, e.g. Groq.scala's
+  // IllegalStateException when the API key isn't configured) is generated outside that decorator
+  // chain and so skips the Cors headers by default. The browser then reports a misleading CORS
+  // error instead of showing the real status/body. Add the headers back on for all three paths.
   override def handleMethodNotAllowed(req: cask.model.Request): cask.model.Response.Raw =
     if req.exchange.getRequestMethod.toString.equalsIgnoreCase("OPTIONS") then
-      cask.model.Response("", statusCode = 204, headers = new Cors(corsOrigin).headers)
-    else super.handleMethodNotAllowed(req)
+      cask.model.Response("", statusCode = 204, headers = cors.headers)
+    else
+      val res = super.handleMethodNotAllowed(req)
+      res.copy(headers = res.headers ++ cors.headers)
+
+  override def handleNotFound(req: cask.model.Request): cask.model.Response.Raw =
+    val res = super.handleNotFound(req)
+    res.copy(headers = res.headers ++ cors.headers)
+
+  override def handleEndpointError(
+    routes: cask.main.Routes,
+    metadata: cask.router.EndpointMetadata[?],
+    e: cask.router.Result.Error,
+    req: cask.model.Request
+  ): cask.model.Response.Raw =
+    val res = super.handleEndpointError(routes, metadata, e, req)
+    res.copy(headers = res.headers ++ cors.headers)
 
   private def ok(v: ujson.Value): cask.model.Response[ujson.Value] = cask.model.Response(v)
 
@@ -88,20 +107,37 @@ object Main extends cask.MainRoutes {
   def listAssessmentsForAnimal(animal: String, request: cask.Request) =
     authed(request) { user => ok(upickle.default.writeJs(Assessments.listForAnimal(UUID.fromString(animal), user.id))) }
 
-  /** Generates AI advice text for an assessment via Groq. Used by the client's "server" AI
-    * backend (see client/.../Ai.scala); the alternative "puter.js" backend calls puter.js
-    * directly from the browser instead of this route.
+  /** Generates structured AI feedback for an assessment via Groq, grouped per welfare domain.
+    * Used by the client's "server" AI backend (see client/.../Ai.scala); the alternative
+    * "puter.js" backend calls puter.js directly from the browser instead of this route.
     */
-  @cask.postJson("/api/ai/advice")
-  def aiAdvice(animal: Animal, assessment: Assessment, request: cask.Request) =
-    authed(request) { user => ok(ujson.Obj("advice" -> Groq.advice(animal, assessment))) }
+  @cask.postJson("/api/ai/assessment-feedback")
+  def aiAssessmentFeedback(animal: Animal, assessment: Assessment, request: cask.Request) =
+    authed(request) { user =>
+      val (overall, perDomain) = Groq.assessmentFeedback(animal, assessment)
+      ok(ujson.Obj("overall" -> overall, "domains" -> perDomain))
+    }
 
   /** Hands out the system prompt (see AiPrompts.scala) so the client's puter.js backend uses the
-    * same wording as the server's own Groq calls, without duplicating it in client code.
+    * same wording -- and the same structured-JSON contract -- as the server's own Groq calls.
     */
   @cask.getJson("/api/ai/system-prompt")
   def aiSystemPrompt(request: cask.Request) =
     authed(request) { _ => ok(ujson.Obj("systemPrompt" -> AiPrompts.systemPrompt)) }
+
+  /** Saves (or updates) the cached AI feedback for one assessment, so it doesn't need
+    * regenerating next time it's viewed -- see database/AiFeedbacks.scala.
+    */
+  @cask.postJson("/api/ai-feedback")
+  def saveAiFeedback(feedback: AiFeedback, request: cask.Request) =
+    authed(request) { user => ok(upickle.default.writeJs(AiFeedbacks.upsert(user.id, feedback))) }
+
+  /** Lists cached AI feedback for an animal's assessments, so a returning session or another
+    * device can show past feedback without re-calling the AI.
+    */
+  @cask.getJson("/api/ai-feedback")
+  def listAiFeedback(animal: String, request: cask.Request) =
+    authed(request) { user => ok(upickle.default.writeJs(AiFeedbacks.listForAnimal(UUID.fromString(animal), user.id))) }
 
   initialize()
 }

@@ -104,6 +104,29 @@ object DataStore {
 
     def surveysFor(a:Animal) = assessments.toSeq.filter(_.animal == a.id)
 
+    private val _aiFeedback:mutable.Map[(AnimalId, Double), AiFeedback] =
+        val stored = Option(localStorage.getItem("aiFeedback"))
+        stored match {
+            case Some(json) =>
+                try
+                    read[Seq[AiFeedback]](json).map(f => (f.animal, f.assessmentTime) -> f).to(mutable.Map)
+                catch
+                    case x:Throwable =>
+                        console.error(x)
+                        mutable.Map.empty[(AnimalId, Double), AiFeedback]
+            case None => mutable.Map.empty[(AnimalId, Double), AiFeedback]
+        }
+
+    def aiFeedbackFor(animal:AnimalId, time:Double):Option[AiFeedback] = _aiFeedback.get((animal, time))
+
+    /** Caches AI-generated feedback locally, keyed by (animal, assessment time) since Assessment
+      * has no id of its own. See fivedomains.Ai for where this is generated and pushed to the
+      * server.
+      */
+    def saveAiFeedback(f:AiFeedback):Unit =
+        _aiFeedback((f.animal, f.assessmentTime)) = f
+        localStorage.setItem("aiFeedback", write(_aiFeedback.values.toSeq))
+
     def animals = animalMap.values.toSeq.sortBy(_.id)
 
     def testAnimals = animalMap.values.filter(_.testData == true).toSeq.sortBy(_.id)
@@ -115,18 +138,25 @@ object DataStore {
     def hasTestData = animalMap.values.exists(_.testData == true)
 
     /** Delete all stored data */
-    def clearAll() = 
+    def clearAll() =
         _assessments.clear()
         animalMap.clear()
+        _aiFeedback.clear()
         localStorage.setItem("assessments", write(assessments))
         localStorage.setItem("animalMap", write(animalMap))
+        localStorage.setItem("aiFeedback", write(_aiFeedback.values.toSeq))
 
-    def clearDemoAnimals() = 
-        // Only keep assessments from non-test animals
+    def clearDemoAnimals() =
+        // Only keep assessments (and their AI feedback) from non-test animals
         val keepAssessments = _assessments.filter((as) => animalMap.get(as.animal).exists(!_.testData))
+        val keepAiFeedback = _aiFeedback.filter((_, f) => animalMap.get(f.animal).exists(!_.testData))
         _assessments.clear()
         _assessments.appendAll(keepAssessments)
         localStorage.setItem("assessments", write(assessments))
+
+        _aiFeedback.clear()
+        _aiFeedback.addAll(keepAiFeedback)
+        localStorage.setItem("aiFeedback", write(_aiFeedback.values.toSeq))
 
         val keepAnimals = animalMap.filter((id, a) => !a.testData)
         animalMap.clear()
