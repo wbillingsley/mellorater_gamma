@@ -22,9 +22,13 @@ enum AuthState:
   */
 object Auth {
 
-    // TODO: this will need to become configurable once the server has a real deployment target,
-    // rather than just localhost for dev.
-    val apiBase = "http://localhost:8081"
+    // In dev, vite (client) and cask (server) run on different ports, so API calls need an
+    // absolute URL and rely on Cors.scala. In a real deployment, serve dist/ and reverse-proxy
+    // /api to the server from the same origin (see deploy/nginx-awserver.conf) so the browser
+    // just calls same-origin paths and no CORS is needed.
+    val apiBase: String =
+        val hostname = dom.window.location.hostname
+        if hostname == "localhost" || hostname == "127.0.0.1" then "http://localhost:8081" else ""
 
     private val tokenKey = "authToken"
 

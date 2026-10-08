@@ -1,0 +1,33 @@
+# systemd unit for the animalwellbeing API server.
+#
+# Install:
+#   sudo cp deploy/awserver.service /etc/systemd/system/
+#   sudo mkdir -p /opt/animalwellbeing
+#   sudo cp server/target/scala-3.5.2/awServer.jar /opt/animalwellbeing/
+#   sudo cp deploy/awserver.env /etc/sysconfig/awserver   # fill in real values first
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now awserver
+
+[Unit]
+Description=Animal Wellbeing API server
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=awserver
+Group=awserver
+WorkingDirectory=/opt/animalwellbeing
+EnvironmentFile=/etc/sysconfig/awserver
+ExecStart=/usr/bin/java -jar /opt/animalwellbeing/awServer.jar
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/animalwellbeing
+
+[Install]
+WantedBy=multi-user.target

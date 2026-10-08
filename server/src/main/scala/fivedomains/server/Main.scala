@@ -13,7 +13,9 @@ object Main extends cask.MainRoutes {
   private val cors = new Cors(corsOrigin)
   override def mainDecorators = Seq(cors)
 
-  // For AI-assisted advice text -- falls back to .env/apikey.txt if GROQ_API_KEY isn't set.
+  // For AI-assisted advice text. Claude is used when its key is configured, with Groq as the
+  // fallback; each falls back to a file under .env/ if its env var isn't set.
+  val claudeApiKey: Option[String] = Secrets.fromEnvOrFile("ANTHROPIC_API_KEY", "claude-apikey.txt")
   val groqApiKey: Option[String] = Secrets.fromEnvOrFile("GROQ_API_KEY", "apikey.txt")
 
   // cask only runs mainDecorators around a *successful* route dispatch -- a 404, a 405, or an
@@ -54,6 +56,32 @@ object Main extends cask.MainRoutes {
 
   @cask.get("/api/health")
   def health() = "ok"
+
+  // Serves the built client (npm run build -> dist/, see vite.config.js's `base`) so a single
+  // process can be the only backend behind a TLS-terminating proxy (haproxy/nginx/etc) -- no
+  // separate static file server needed. Not used by `npm run dev`, which serves the client itself.
+  // One endpoint (rather than cask.staticFiles + a separate index route) because cask refuses to
+  // register a subpath-capturing route and another endpoint at the same path: the bare
+  // "/mellorater-alpha" request (no remaining segments) needs index.html, same as every other
+  // Scala.js routes client-side via the URL hash.
+  private val clientDistDir = sys.env.getOrElse("CLIENT_DIST_DIR", "dist")
+
+  @cask.get("/")
+  def rootRedirect() = cask.model.Redirect("/mellorater-alpha/")
+
+  @cask.get("/mellorater-alpha", subpath = true)
+  def clientApp(remaining: cask.RemainingPathSegments): cask.model.Response.Raw =
+    val segments = remaining.value.filter(s => s != "." && s != "..")
+    val relPath = if segments.isEmpty then "index.html" else segments.mkString("/")
+    val file = java.nio.file.Paths.get(clientDistDir, relPath)
+    if java.nio.file.Files.isRegularFile(file) then
+      val contentType = Option(java.nio.file.Files.probeContentType(file)).getOrElse("application/octet-stream")
+      cask.model.Response(
+        java.nio.file.Files.newInputStream(file): cask.model.Response.Data,
+        headers = Seq("Content-Type" -> contentType)
+      )
+    else
+      cask.model.Response("Not found", statusCode = 404)
 
   @cask.postJson("/api/register")
   def register(name: String) = {
@@ -107,14 +135,22 @@ object Main extends cask.MainRoutes {
   def listAssessmentsForAnimal(animal: String, request: cask.Request) =
     authed(request) { user => ok(upickle.default.writeJs(Assessments.listForAnimal(UUID.fromString(animal), user.id))) }
 
-  /** Generates structured AI feedback for an assessment via Groq, grouped per welfare domain.
+  /** Generates structured AI feedback for an assessment, grouped per welfare domain -- via Claude
+    * if configured, otherwise (or if the Claude call fails and a Groq key is set) via Groq.
     * Used by the client's "server" AI backend (see client/.../Ai.scala); the alternative
     * "puter.js" backend calls puter.js directly from the browser instead of this route.
     */
   @cask.postJson("/api/ai/assessment-feedback")
   def aiAssessmentFeedback(animal: Animal, assessment: Assessment, request: cask.Request) =
     authed(request) { user =>
-      val (overall, perDomain) = Groq.assessmentFeedback(animal, assessment)
+      val (overall, perDomain) =
+        if claudeApiKey.isEmpty then Groq.assessmentFeedback(animal, assessment)
+        else
+          try Claude.assessmentFeedback(animal, assessment)
+          catch
+            case scala.util.control.NonFatal(e) if groqApiKey.isDefined =>
+              System.err.println(s"Claude feedback failed, falling back to Groq: $e")
+              Groq.assessmentFeedback(animal, assessment)
       ok(ujson.Obj("overall" -> overall, "domains" -> perDomain))
     }
 
