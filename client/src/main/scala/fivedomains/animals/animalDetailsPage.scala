@@ -29,10 +29,6 @@ def assessmentQuantumStats(a:Animal, surveys:Seq[Assessment]) =
     )
 
 
-enum SummarySort(val text:String):
-    case DomainOrder extends SummarySort("Domain order")
-    case AreasOfConcern extends SummarySort("Areas of concern")
-
 enum Trend:
     case Up, Down, Steady, Unknown
 
@@ -55,57 +51,6 @@ def trendIcon(t:Trend) =
         case Trend.Down => <.span(^.cls := "material-symbols-outlined", ^.style := s"color: $fgVeryPoor; vertical-align: middle;", ^.attr.title := "Declined since the previous assessment", "trending_down")
         case Trend.Steady => <.span(^.cls := "material-symbols-outlined", ^.style := "color: gray; vertical-align: middle;", ^.attr.title := "About the same as the previous assessment", "trending_flat")
         case Trend.Unknown => <.span()
-
-/** A summary of one assessment, grouped by domain, with a trend indicator against the animal's
-  * previous assessment. `sort` chooses whether every domain/question is shown (in domain order)
-  * or only the ones that are a current concern.
-  */
-def pastRedFlags(animal:Animal, allSurveys:Seq[Assessment], selected:Option[Assessment], sort:SummarySort):DHtmlModifier =
-    selected match
-        case None => None
-        case Some(assess) =>
-            val ascSurveys = allSurveys.sortBy(_.time)
-
-            val domains = sort match
-                case SummarySort.DomainOrder => Domain.values.toSeq
-                case SummarySort.AreasOfConcern => assess.domainsContainingConcern.toSeq
-
-            // Pair each domain with the questions to show under it, dropping domains left with none
-            // (e.g. "areas of concern" mode, for a domain with nothing currently concerning).
-            val domainsWithQuestions:Seq[(Domain, Seq[Question])] =
-                domains.map { d =>
-                    val questions = sort match
-                        case SummarySort.DomainOrder => domainQuestions(d)
-                        case SummarySort.AreasOfConcern => domainQuestions(d).filter(q => assess.answers.get(q.num).exists(_.value.asDouble <= Rating.Poor.value))
-                    d -> questions
-                }.filter((_, qs) => qs.nonEmpty)
-
-            <.div(^.cls := nakedParaMargins,
-
-                if domainsWithQuestions.isEmpty then <.p("No areas of concern in this assessment.") else None,
-
-                for (d, questions) <- domainsWithQuestions yield
-                    <.div(
-                        <.h4(
-                            <.div(^.style := "float: left; margin-right: 8px;", unboxedDomainLogo(d, assess.categoryScore(d))),
-                            d.title, " ", trendIcon(domainTrend(ascSurveys, assess, d))
-                        ),
-
-                        for
-                            q <- questions
-                            a <- assess.answers.get(q.num)
-                        yield
-                            <.div(^.style := "margin: 0 0 1em 1.5em;",
-                                <.h5(
-                                    <.div(^.style := "float: left; margin-right: 10px; margin-top: 2px;", boxedScoreFaceHtml(Some(a.value.asDouble))),
-                                    q.headline(animal),
-                                    if a.confidence.low then <.span(^.cls := "material-symbols-outlined", ^.style := "vertical-align: middle;", "question_mark") else None
-                                ),
-                                for n <- a.note yield <.p(^.style := "font-style: italic;", n),
-                                <.div(feedback(animal, assess, QuestionIdentifier.fromOrdinal(a.q)))
-                            )
-                    )
-            )
 
 /** Invokes the AI feedback call and shows the result, structured under each welfare domain.
   * Shows cached feedback (from DataStore, backfilled from the server if needed) with a
@@ -195,8 +140,6 @@ def animalDetailsPage(aId:AnimalId) =
 
 case class SurveySelectWidget(animal:Animal, surveys:Seq[Assessment]) extends DHtmlComponent {
 
-    val mode = stateVariable(SummarySort.DomainOrder)
-
     val max = surveys.length
     val number = stateVariable(max)
 
@@ -230,25 +173,9 @@ case class SurveySelectWidget(animal:Animal, surveys:Seq[Assessment]) extends DH
             ),
 
 
-            <.p(
-                "Show ",
-                <.select(^.style := s"margin-left: 0.25em; ",
-                    ^.on.change ==> { (e) =>
-                        val n = e.target.asInstanceOf[scalajs.js.Dynamic].value.asInstanceOf[String]
-                        mode.value = SummarySort.fromOrdinal(n.toInt)
-                    },
-                    for s <- SummarySort.values yield
-                        <.option(
-                            ^.prop.value := s.ordinal, s.text,
-                            if mode.value == s then ^.prop.selected := "selected" else None
-                        )
-                )
-            ),
-
-
         ),
 
-        pastRedFlags(animal, surveys, selected, mode.value),
+        assessmentHistory(animal, surveys, selected),
 
         for assess <- selected.toSeq yield AiFeedbackPanel(animal, assess)
         )
