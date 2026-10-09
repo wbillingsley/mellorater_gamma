@@ -1,0 +1,12 @@
+# Caddy as the TLS-terminating front door -- the simpler alternative to haproxy.cfg for a
+# standalone box (used for the Linode deployment; the university server uses haproxy).
+# Caddy obtains and renews the Let's Encrypt certificate itself, as long as the domain's DNS
+# points at this server and ports 80/443 are open.
+#
+# Install (Ubuntu): see "Linode (Ubuntu + Caddy)" in deploy/README.md, then
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile   # with example.com replaced by your domain
+#   sudo systemctl reload caddy
+
+example.com {
+	reverse_proxy 127.0.0.1:8081
+}

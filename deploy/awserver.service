@@ -19,7 +19,8 @@ User=awserver
 Group=awserver
 WorkingDirectory=/opt/animalwellbeing
 EnvironmentFile=/etc/sysconfig/awserver
-ExecStart=/usr/bin/java -jar /opt/animalwellbeing/awServer.jar
+# Heap capped so the JVM leaves room for Postgres on a small (2 GB) box.
+ExecStart=/usr/bin/java -Xmx512m -XX:+UseSerialGC -jar /opt/animalwellbeing/awServer.jar
 Restart=on-failure
 RestartSec=5
 
