@@ -66,9 +66,10 @@ GRANT USAGE ON SCHEMA public TO awserver;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO awserver;
 SQL
 
-# App: jar + built client, run by systemd.
+# App: jar + built client + AI prompt files, run by systemd.
 cp "$HERE/awServer.jar" "$APP/"
 rm -rf "$APP/dist" && cp -r "$HERE/dist" "$APP/dist"
+rm -rf "$APP/prompts" && cp -r "$HERE/prompts" "$APP/prompts"
 chown -R awserver:awserver "$APP"
 cp "$HERE/awserver.service" /etc/systemd/system/awserver.service
 systemctl daemon-reload

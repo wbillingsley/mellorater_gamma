@@ -74,6 +74,10 @@ fills in `Assessment` surveys for them. Key types:
   the client body/query directly.
 - Outbound calls to an AI API should use `requests` (already a dependency) — keep API keys in
   env vars, never committed.
+- AI prompt text lives in `prompts/` (`system.md`, `reference.md`, `output-format.md`; dir set by
+  `PROMPTS_DIR`), loaded by `AiPrompts.scala` on each request — edit those files rather than
+  putting prompt text back into Scala. Keep the system prompt identical across requests (no
+  per-request data in it) so it stays cacheable; per-assessment data goes in the user message.
 
 ## Running things
 

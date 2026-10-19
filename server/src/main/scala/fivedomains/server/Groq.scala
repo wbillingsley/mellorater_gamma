@@ -32,6 +32,8 @@ object Groq {
       // Groq's JSON mode makes the model reply with a parseable object, matching AiPrompts.systemPrompt's contract.
       "response_format" -> ujson.Obj("type" -> "json_object"),
       "messages" -> ujson.Arr(
+        // No cache markers in Groq's API -- for models that support it, Groq caches a repeated
+        // prompt prefix automatically, which this stable system message provides.
         ujson.Obj("role" -> "system", "content" -> AiPrompts.systemPrompt),
         ujson.Obj("role" -> "user", "content" -> ujson.write(payload))
       )

@@ -18,6 +18,10 @@ object Claude {
   // phone. Set explicitly because the default differs by model (high on Sonnet, medium on Opus).
   private val effort = sys.env.get("CLAUDE_EFFORT").filter(_.nonEmpty).getOrElse("medium")
 
+  // Prompt cache lifetime: 5m (default) or 1h. A cache hit only happens if the next request starts
+  // within this window of the last one; 1h costs 2x to write (vs 1.25x) but survives quiet spells.
+  private val cacheTtl = sys.env.get("CLAUDE_CACHE_TTL").filter(_.nonEmpty).getOrElse("5m")
+
   // Structured outputs: constrains the reply to exactly the JSON shape AiPrompts.systemPrompt
   // asks for, so parsing below can't trip over stray prose or a missing domain key.
   private val outputSchema = ujson.Obj(
@@ -35,6 +39,11 @@ object Claude {
     "additionalProperties" -> false
   )
 
+  private def systemBlocks =
+    val blocks = AiPrompts.systemBlocks.map(text => ujson.Obj("type" -> "text", "text" -> text))
+    blocks.last("cache_control") = ujson.Obj("type" -> "ephemeral", "ttl" -> cacheTtl)
+    ujson.Arr.from(blocks)
+
   /** Returns (overall summary, perDomain feedback map) parsed from the model's JSON reply. */
   def assessmentFeedback(animal: Animal, assessment: Assessment): (String, Map[String, String]) = {
     val apiKey = Main.claudeApiKey.getOrElse(
@@ -49,7 +58,10 @@ object Claude {
     val body = ujson.Obj(
       "model" -> model,
       "max_tokens" -> 16000,
-      "system" -> AiPrompts.systemPrompt,
+      // The system prompt (instructions, reference material, output format) is identical for every
+      // request, so a cache breakpoint on its last block lets Anthropic reuse it at ~10% of the
+      // input price. Only the per-assessment user message below is processed fresh.
+      "system" -> systemBlocks,
       "output_config" -> ujson.Obj(
         "effort" -> effort,
         "format" -> ujson.Obj("type" -> "json_schema", "schema" -> outputSchema)
@@ -76,6 +88,8 @@ object Claude {
     )
 
     val json = ujson.read(response.text())
+    val usage = json("usage")
+    println(s"Claude usage: input=${usage("input_tokens")} cache_write=${usage.obj.get("cache_creation_input_tokens").getOrElse(0)} cache_read=${usage.obj.get("cache_read_input_tokens").getOrElse(0)} output=${usage("output_tokens")}")
     json("stop_reason").str match
       case "refusal" => throw new IllegalStateException(s"Claude declined the request: ${json.obj.get("stop_details")}")
       case "max_tokens" => throw new IllegalStateException("Claude's reply was cut off at max_tokens")

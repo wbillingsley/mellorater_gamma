@@ -26,7 +26,7 @@ enables the firewall (SSH/80/443 only). It's safe to re-run.
 
 ```sh
 ssh root@myserver 'mkdir -p /root/aw-deploy'
-scp -r server/target/scala-3.5.2/awServer.jar dist initdb/init.sql deploy/awserver.service \
+scp -r server/target/scala-3.5.2/awServer.jar dist prompts initdb/init.sql deploy/awserver.service \
     deploy/awserver.env.example deploy/Caddyfile deploy/setup-ubuntu.sh root@myserver:/root/aw-deploy/
 ssh root@myserver '/root/aw-deploy/setup-ubuntu.sh mellorater.example.com'
 ```
@@ -70,7 +70,7 @@ Ship and install:
 
 ```sh
 scp server/target/scala-3.5.2/awServer.jar myserver:/opt/animalwellbeing/
-scp -r dist myserver:/opt/animalwellbeing/
+scp -r dist prompts myserver:/opt/animalwellbeing/
 scp deploy/awserver.service myserver:/tmp/
 scp deploy/awserver.env.example myserver:/tmp/awserver.env
 scp deploy/haproxy.cfg myserver:/tmp/
@@ -96,6 +96,11 @@ sudo systemctl enable --now haproxy
 
 `curl http://127.0.0.1:8081/api/health` on the server should return `ok` directly from the jar,
 and once the proxy/DNS/cert are in place, `https://<domain>/mellorater-alpha/` should load the app.
+
+The AI prompts live in `prompts/` (see `AiPrompts.scala`) and are re-read on every request, so to
+change them just copy the edited files into `/opt/animalwellbeing/prompts/` -- no rebuild or
+restart. Re-running `setup-ubuntu.sh` overwrites that directory from the repo, so treat the repo
+copy as the master.
 
 To deploy an update later: rebuild, copy the jar and `dist/` into `/opt/animalwellbeing/`
 (`chown -R awserver:awserver` it), then `sudo systemctl restart awserver`.
